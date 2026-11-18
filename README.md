@@ -1,12 +1,6 @@
 # unwebpack-sourcemap
 
-# Archive Notice (April 15 2022)
-
-This script seems to be helpful for many, but unfortunately I also do not have time to maintain it and properly code review the work of potential contributors. I'll leave it in an archived state for a while for anyone that wants to fork it, but I will eventually delete this repository.
-
-
-
-### Recover uncompiled TypeScript sources, JSX, and more from Webpack sourcemaps.
+Recover uncompiled TypeScript sources, JSX, and more from Webpack sourcemaps — for use in penetration testing and static code analysis.
 
 As single-page applications take over the world, more and more is being asked of the browser as a client. It is common for SPAs to use [Webpack](https://webpack.js.org/) to handle browser script build processes. Usually, Webpack will transpile React/Vue/TypeScript/etc. to JavaScript, minify/compress it, and then serve it as a single bundle to the application.
 
@@ -15,31 +9,104 @@ However, Webpack also produces [JavaScript source maps](https://www.html5rocks.c
 When the browser was simply handling an array of JavaScript files concatenated and (maybe) packed, this wasn't so much of an issue. However, developers of SPAs assume the use of JavaScript as an **intermediate representation**. Developers often expect production to contain obfuscated and/or otherwise-processed scripts, and do not understand just what the sourcemaps contain in many cases. This model aligns closely with shipping binaries: source is compiled and you ship the interpretable version. If this is the case, the sourcemap is akin to leaking your source alongside the "binary" (bundle) you have made. The bundle can be reverse engineered just as a binary can, but sourcemaps make this far easier.
 
 
-## Usage 
+## Requirements
 
-The script requires Python3, `BeautifulSoup4` and `requests`. Install dependencies with `pip3 install -r requirements.txt`. The script can handle downloaded sourcemaps, or attempt to parse them from remote sources for you. In all of these cases, we will assume that you have a directory you have created called `output` alongside the script:
-
-```
-\$ mkdir output
-```
-
-In order of increasing noisiness, to unpack a local sourcemap:
+Python 3.8+ with `beautifulsoup4` and `requests`. Install with:
 
 ```
-\$ ./unwebpack_sourcemap.py --local /path/to/source.map output
+pip3 install -r requirements.txt
 ```
 
-To unpack a remote sourcemap:
+
+## Usage
+
+In all examples below, `output` is the directory where extracted source files will be written.
 
 ```
-\$ ./unwebpack_sourcemap.py https://pathto.example.com/source.map output
+mkdir output
 ```
 
-To attempt to read all `<script src>` on an HTML page, fetch JS assets, look for `sourceMappingURI`, and pull sourcemaps from remote sources:
+Unpack a **local** sourcemap:
 
 ```
-\$ ./unwebpack_sourcemap.py --detect https://pathto.example.com/spa_root/ output
+./unwebpack_sourcemap.py --local /path/to/source.map output
 ```
+
+Unpack a **remote** sourcemap:
+
+```
+./unwebpack_sourcemap.py https://pathto.example.com/source.map output
+```
+
+**Detect** and pull all sourcemaps linked from an HTML page (`<script src>`, `<link rel="preload" as="script">`, and inline HTML comments):
+
+```
+./unwebpack_sourcemap.py --detect https://pathto.example.com/spa_root/ output
+```
+
+**Batch mode** — process many targets at once from a file (one URI or path per line, `#` lines are comments):
+
+```
+./unwebpack_sourcemap.py --target-list targets.txt output
+```
+
+### Pentest-specific options
+
+Route traffic through an intercepting proxy (e.g. Burp Suite):
+
+```
+./unwebpack_sourcemap.py --proxy http://127.0.0.1:8080 --disable-ssl-verification \
+    https://pathto.example.com/source.map output
+```
+
+Pass session cookies to access authenticated resources:
+
+```
+./unwebpack_sourcemap.py --cookies "session=abc123; csrf=xyz" \
+    https://pathto.example.com/source.map output
+```
+
+Pass an Authorization header (e.g. Bearer token):
+
+```
+./unwebpack_sourcemap.py --auth-header "Bearer eyJ..." \
+    https://pathto.example.com/source.map output
+```
+
+Pass arbitrary custom headers (repeatable):
+
+```
+./unwebpack_sourcemap.py --header "X-Internal-Token: secret" \
+                         --header "X-Forwarded-For: 127.0.0.1" \
+    https://pathto.example.com/source.map output
+```
+
+Write original (unsanitised) source paths from the sourcemap:
+
+```
+./unwebpack_sourcemap.py --dangerously-write-paths \
+    https://pathto.example.com/source.map output
+```
+
+> **Warning:** `--dangerously-write-paths` writes the directory structure exactly as declared in the sourcemap (after stripping the `webpack://` prefix). Paths are still confined to the output directory — traversal attempts are blocked — but be aware of what you are writing from an untrusted source.
+
+
+### Full options reference
+
+| Flag | Description |
+|---|---|
+| `-l`, `--local` | Target is a local `.map` file, not a URI |
+| `-d`, `--detect` | Scan `<script src>`, `<link rel="preload" as="script">` and HTML comments on the page, fetch each JS asset, and extract any linked or inline sourcemaps |
+| `--make-directory` | Create the output directory if it does not exist |
+| `--dangerously-write-paths` | Write original source paths instead of sanitising them (still confined to output directory) |
+| `--disable-ssl-verification` | Skip TLS certificate verification |
+| `--proxy URL` | HTTP/HTTPS proxy, e.g. `http://127.0.0.1:8080` |
+| `--cookies VALUE` | Cookie header string sent with every request |
+| `--auth-header VALUE` | `Authorization` header value sent with every request |
+| `--header NAME:VALUE` | Arbitrary extra header (repeatable) |
+| `--timeout N` | Per-request timeout in seconds (default: 30) |
+| `--target-list FILE` | Batch mode: file of URIs/paths, one per line |
+
 
 ## I'm a developer and this scares me. What do?
 
@@ -53,11 +120,6 @@ You have a few options:
 ## Example Vulnerable Application
 
 An example TypeScript+React application is included in `example-react-ts-app`. You can run this locally and run the script against it.
-
-
-## Contributions
-
-This is an alpha-level script built for a series of engagements I was working on in which sourcemaps are disclosed in production environments. It currently is only meant to work with TypeScript+React and TypeScript+Vue templates. Pull requests to harden the script, make it read more sourcemaps, et cetera are greatly appreciated.
 
 
 ## License
