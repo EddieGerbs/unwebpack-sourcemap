@@ -346,8 +346,15 @@ class SourceMapExtractor(object):
         path, filename = os.path.split(source_path)
         if path.startswith('./'):
             path = path[2:]
-        if path.startswith('../'):
-            path = 'parent_dir/' + path[3:]
+        # Collapse any number of leading ../ into a single parent_dir/ prefix
+        # so that ../../node_modules/foo becomes parent_dir/node_modules/foo
+        # rather than generating empty_N intermediate directories.
+        had_dotdot = False
+        while path.startswith('../'):
+            had_dotdot = True
+            path = path[3:]
+        if had_dotdot:
+            path = 'parent_dir/' + path
         if path.startswith('.'):
             path = ""
 
